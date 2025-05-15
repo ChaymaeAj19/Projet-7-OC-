@@ -1,20 +1,17 @@
+from flask import Flask, jsonify, request, render_template
 import os
 import joblib
 import pandas as pd
 import shap
-from flask import Flask, jsonify, request
 
 app = Flask(__name__)
 
-# Répertoire courant du script
 current_directory = os.path.abspath(os.path.dirname(__file__))
 
-# Chemins vers les fichiers
 model_path = os.path.join(current_directory, "Simulations", "Best_model", "lgbm_pipeline.pkl")
 scaler_path = os.path.join(current_directory, "Simulations", "Scaler", "StandardScaler.pkl")
 csv_path = os.path.join(current_directory, "Simulations", "Data", "df_train.csv")
 
-# Vérifications de l'existence des fichiers
 if not os.path.exists(model_path):
     raise FileNotFoundError(f"Fichier modèle non trouvé : {model_path}")
 if not os.path.exists(scaler_path):
@@ -22,13 +19,12 @@ if not os.path.exists(scaler_path):
 if not os.path.exists(csv_path):
     raise FileNotFoundError(f"Fichier CSV non trouvé : {csv_path}")
 
-# Chargement du modèle et scaler
 model = joblib.load(model_path)
 scaler = joblib.load(scaler_path)
 
-@app.route("/", methods=["GET"])
+@app.route("/")
 def index():
-    return "API de scoring de crédit — en ligne et opérationnelle 🚀", 200
+    return render_template("index.html")
 
 @app.route("/predict", methods=['POST'])
 def predict():
@@ -37,25 +33,17 @@ def predict():
     if sk_id_curr is None:
         return jsonify({'error': "Champ 'SK_ID_CURR' requis"}), 400
 
-    # Charger le CSV
     df = pd.read_csv(csv_path)
-
-    # Filtrer l'échantillon
     sample = df[df['SK_ID_CURR'] == sk_id_curr]
     if sample.empty:
         return jsonify({'error': f"Aucun client trouvé avec SK_ID_CURR = {sk_id_curr}"}), 404
 
-    # Supprimer la colonne ID pour la prédiction
     sample = sample.drop(columns=['SK_ID_CURR'])
-
-    # Appliquer le scaler
     sample_scaled = scaler.transform(sample)
 
-    # Prédire
     prediction = model.predict_proba(sample_scaled)
-    proba = prediction[0][1]  # Probabilité classe positive
+    proba = prediction[0][1]
 
-    # Valeurs SHAP
     explainer = shap.TreeExplainer(model)
     shap_values = explainer.shap_values(sample_scaled)
 
