@@ -1,21 +1,44 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ma Page Dynamique</title>
+    <meta charset="UTF-8" />
+    <title>Prédiction crédit</title>
 </head>
 <body>
-    <header>
-        <h1>{{ message }}</h1> <!-- Afficher la variable 'message' -->
-    </header>
-    
-    <section>
-        <p>Ceci est un exemple de page HTML où une variable est insérée dynamiquement.</p>
-    </section>
+    <h1>Prédiction de risque crédit</h1>
+    <form id="predictForm">
+        <label for="sk_id">SK_ID_CURR :</label>
+        <input type="number" id="sk_id" name="sk_id" required />
+        <button type="submit">Prédire</button>
+    </form>
+    <div id="result"></div>
 
-    <footer>
-        <p>Page générée avec Flask</p>
-    </footer>
+    <script>
+    const form = document.getElementById('predictForm');
+    const resultDiv = document.getElementById('result');
+
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const sk_id = document.getElementById('sk_id').value;
+
+        const response = await fetch('/predict', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({SK_ID_CURR: Number(sk_id)})
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+            resultDiv.innerHTML = `
+                <p><strong>Probabilité de défaut:</strong> ${data.probability.toFixed(2)}%</p>
+                <h3>Valeurs SHAP :</h3>
+                <pre>${JSON.stringify(data.shap_values, null, 2)}</pre>
+            `;
+        } else {
+            resultDiv.textContent = `Erreur : ${data.error}`;
+        }
+    });
+    </script>
 </body>
 </html>
