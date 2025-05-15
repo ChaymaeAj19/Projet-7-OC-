@@ -26,6 +26,10 @@ if not os.path.exists(csv_path):
 model = joblib.load(model_path)
 scaler = joblib.load(scaler_path)
 
+@app.route("/", methods=["GET"])
+def index():
+    return "API de scoring de crédit — en ligne et opérationnelle 🚀", 200
+
 @app.route("/predict", methods=['POST'])
 def predict():
     data = request.json
