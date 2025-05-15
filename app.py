@@ -6,27 +6,40 @@ from flask import Flask, jsonify, request
 
 app = Flask(__name__)
 
-# Récupérez le répertoire actuel du fichier api.py
-current_directory = os.path.dirname(os.path.abspath(__file__))
+# Répertoire courant du script
+current_directory = os.path.abspath(os.path.dirname(__file__))
 
-# Charger le modèle en dehors de la clause if __name__ == "__main__":
-model_path = os.path.join(current_directory, "..", "Simulations", "Best_model", "lgbm_pipeline.pkl")
+# Chemins vers les fichiers
+model_path = os.path.join(current_directory, "Simulations", "Best_model", "lgbm_pipeline.pkl")
+scaler_path = os.path.join(current_directory, "Simulations", "Scaler", "StandardScaler.pkl")
+csv_path = os.path.join(current_directory, "Simulations", "Data", "df_train.csv")
+
+# Vérifications de l'existence des fichiers
+if not os.path.exists(model_path):
+    raise FileNotFoundError(f"Fichier modèle non trouvé : {model_path}")
+if not os.path.exists(scaler_path):
+    raise FileNotFoundError(f"Fichier scaler non trouvé : {scaler_path}")
+if not os.path.exists(csv_path):
+    raise FileNotFoundError(f"Fichier CSV non trouvé : {csv_path}")
+
+# Chargement du modèle et scaler
 model = joblib.load(model_path)
-
-# Charger le scaler
-scaler_path = os.path.join(current_directory, "..", "Simulations", "Scaler", "StandardScaler.pkl")
 scaler = joblib.load(scaler_path)
 
 @app.route("/predict", methods=['POST'])
 def predict():
     data = request.json
-    sk_id_curr = data['SK_ID_CURR']
+    sk_id_curr = data.get('SK_ID_CURR')
+    if sk_id_curr is None:
+        return jsonify({'error': "Champ 'SK_ID_CURR' requis"}), 400
 
-    # Construisez le chemin complet vers df_train.csv en utilisant le chemin relatif depuis l'emplacement de api.py
-    csv_path = os.path.join(current_directory, "..", "Simulations", "Data", "df_train.csv")
     # Charger le CSV
     df = pd.read_csv(csv_path)
+
+    # Filtrer l'échantillon
     sample = df[df['SK_ID_CURR'] == sk_id_curr]
+    if sample.empty:
+        return jsonify({'error': f"Aucun client trouvé avec SK_ID_CURR = {sk_id_curr}"}), 404
 
     # Supprimer la colonne ID pour la prédiction
     sample = sample.drop(columns=['SK_ID_CURR'])
@@ -36,15 +49,14 @@ def predict():
 
     # Prédire
     prediction = model.predict_proba(sample_scaled)
-    proba = prediction[0][1] # Probabilité de la seconde classe
+    proba = prediction[0][1]  # Probabilité classe positive
 
-    # Calculer les valeurs SHAP pour l'échantillon donné
+    # Valeurs SHAP
     explainer = shap.TreeExplainer(model)
     shap_values = explainer.shap_values(sample_scaled)
-    
-    # Retourner les valeurs SHAP avec la probabilité
+
     return jsonify({
-        'probability': proba*100, 
+        'probability': round(proba * 100, 2),
         'shap_values': shap_values[1][0].tolist(),
         'feature_names': sample.columns.tolist(),
         'feature_values': sample.values[0].tolist()
