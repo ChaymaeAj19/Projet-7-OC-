@@ -44,21 +44,20 @@ def predict():
     try:
         sample_input = sample[expected_features]
 
-        # Garantir que sample_input est bien un DataFrame avec colonnes nommées (évite warning LightGBM)
+        # Reconstruction DataFrame pour être sûr de l’ordre et colonnes
         sample_input = pd.DataFrame(sample_input.values, columns=expected_features)
+
+        # Conversion des colonnes en numériques (float/int) quand c’est possible
+        sample_input = sample_input.apply(pd.to_numeric, errors='ignore')
+
     except Exception as e:
         return jsonify({'error': f"Erreur dans le réarrangement des colonnes : {str(e)}"}), 500
 
     try:
-        # Limiter le nombre de threads utilisés par LightGBM (optionnel mais conseillé)
-        model = pipeline.named_steps['model']
-        model.set_params(n_jobs=1)
-
-        # Prédiction
         proba = pipeline.predict_proba(sample_input)[0][1]
 
-        # SHAP avec nouvelle API plus stable et moins gourmande en mémoire
-        explainer = shap.Explainer(model, feature_names=expected_features)
+        model = pipeline.named_steps['model']
+        explainer = shap.Explainer(model)
         shap_values = explainer(sample_input)
 
         return jsonify({
