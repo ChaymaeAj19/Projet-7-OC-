@@ -3,6 +3,7 @@ import os
 import joblib
 import pandas as pd
 import shap
+import gc  # Pour libérer la mémoire si nécessaire
 
 app = Flask(__name__)
 
@@ -43,24 +44,29 @@ def predict():
 
     try:
         sample_input = sample[expected_features].copy()
-
-        # Conversion sécurisée des colonnes numériques
-        for col in sample_input.columns:
-            try:
-                sample_input[col] = pd.to_numeric(sample_input[col])
-            except Exception:
-                pass
-
     except Exception as e:
-        return jsonify({'error': f"Erreur dans le réarrangement ou conversion des colonnes : {str(e)}"}), 500
+        return jsonify({'error': f"Erreur dans le réarrangement des colonnes : {str(e)}"}), 500
 
     try:
+        # Convertir toutes les colonnes en numériques si possible
+        sample_input = sample_input.apply(pd.to_numeric, errors='coerce')
+
+        # Gestion des NaNs
+        if sample_input.isnull().any().any():
+            sample_input = sample_input.fillna(0)
+
+        # Prédiction
         proba = pipeline.predict_proba(sample_input)[0][1]
 
+        # Explication SHAP (optimisé)
         model = pipeline.named_steps['model']
-        explainer = shap.TreeExplainer(model)
-        shap_values = explainer.shap_values(sample_input)
-        shap_values_row = shap_values[1][0].tolist()  # Classe 1 (positive)
+        explainer = shap.Explainer(model)
+        shap_values = explainer(sample_input)
+        shap_values_row = shap_values.values[0].tolist()
+
+        # Libérer mémoire
+        del shap_values
+        gc.collect()
 
         return jsonify({
             'probability': round(proba * 100, 2),
