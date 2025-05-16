@@ -9,8 +9,8 @@ app = Flask(__name__)
 # === Paths ===
 current_directory = os.path.abspath(os.path.dirname(__file__))
 model_path = os.path.join(current_directory, "Simulations", "Best_model", "lgbm_pipeline.pkl")
-preprocessor_path = os.path.join(current_directory, "Simulations", "Scaler", "preprocessor.pkl")
-csv_path = os.path.join(current_directory, "Simulations", "Data", "df_train.csv")
+preprocessor_path = os.path.join(current_directory, "Simulations", "Scaler", "StandardScaler1.pkl")
+csv_path = os.path.join(current_directory, "Simulations", "Data", "df_train_sample.csv")
 
 # === Vérification des fichiers ===
 for path, label in [(model_path, "modèle"), (preprocessor_path, "préprocesseur"), (csv_path, "CSV")]:
