@@ -9,17 +9,15 @@ app = Flask(__name__)
 # === Paths ===
 current_directory = os.path.abspath(os.path.dirname(__file__))
 model_path = os.path.join(current_directory, "Simulations", "Best_model", "lgbm_pipeline.pkl")
-preprocessor_path = os.path.join(current_directory, "Simulations", "Scaler", "StandardScaler1.pkl")
 csv_path = os.path.join(current_directory, "Simulations", "Data", "df_train_sample.csv")
 
 # === Vérification des fichiers ===
-for path, label in [(model_path, "modèle"), (preprocessor_path, "préprocesseur"), (csv_path, "CSV")]:
+for path, label in [(model_path, "modèle"), (csv_path, "CSV")]:
     if not os.path.exists(path):
         raise FileNotFoundError(f"Fichier {label} non trouvé : {path}")
 
-# === Chargement des objets ===
+# === Chargement du pipeline complet ===
 model = joblib.load(model_path)
-preprocessor = joblib.load(preprocessor_path)
 
 # === Routes ===
 @app.route("/")
@@ -38,18 +36,15 @@ def predict():
     if sample.empty:
         return jsonify({'error': f"Aucun client trouvé avec SK_ID_CURR = {sk_id_curr}"}), 404
 
-    # Séparer SK_ID_CURR
     sample_input = sample.drop(columns=['SK_ID_CURR'])
 
-    # Transformation des données (encodage + imputation + scaling)
-    sample_processed = preprocessor.transform(sample_input)
+    # Prédiction directe via le pipeline
+    proba = model.predict_proba(sample_input)[0][1]
 
-    # Prédiction
-    proba = model.predict_proba(sample_processed)[0][1]
-
-    # SHAP explainer (TreeExplainer compatible avec LightGBM ou XGBoost)
-    explainer = shap.TreeExplainer(model)
-    shap_values = explainer.shap_values(sample_processed)
+    # SHAP: extraire le classifieur LightGBM et le transformer sur les données pré-traitées
+    explainer = shap.TreeExplainer(model.named_steps['classifier'])
+    sample_transformed = model[:-1].transform(sample_input)  # Tout sauf le classifieur
+    shap_values = explainer.shap_values(sample_transformed)
 
     return jsonify({
         'probability': round(proba * 100, 2),
