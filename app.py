@@ -3,21 +3,22 @@ import os
 import joblib
 import pandas as pd
 import shap
+import numpy as np
 
 app = Flask(__name__)
 
 # === Paths ===
 current_directory = os.path.abspath(os.path.dirname(__file__))
-model_path = os.path.join(current_directory, "Simulations", "Best_model", "lgbm_pipeline.pkl")
-csv_path = os.path.join(current_directory, "Simulations", "Data", "df_train_sample.csv")
+pipeline_path = os.path.join(current_directory, "Simulations", "Best_model", "lgbm_pipeline.pkl")
+csv_path = os.path.join(current_directory, "Simulations", "Data", "features_for_prediction.csv")
 
 # === Vérification des fichiers ===
-for path, label in [(model_path, "modèle"), (csv_path, "CSV")]:
+for path, label in [(pipeline_path, "pipeline complet"), (csv_path, "CSV")]:
     if not os.path.exists(path):
         raise FileNotFoundError(f"Fichier {label} non trouvé : {path}")
 
 # === Chargement du pipeline complet ===
-model = joblib.load(model_path)
+pipeline = joblib.load(pipeline_path)
 
 # === Routes ===
 @app.route("/")
@@ -31,20 +32,27 @@ def predict():
     if sk_id_curr is None:
         return jsonify({'error': "Champ 'SK_ID_CURR' requis"}), 400
 
+    # Charger les données
     df = pd.read_csv(csv_path)
+    if 'SK_ID_CURR' not in df.columns:
+        return jsonify({'error': "La colonne 'SK_ID_CURR' est absente du fichier CSV"}), 500
+
     sample = df[df['SK_ID_CURR'] == sk_id_curr]
     if sample.empty:
         return jsonify({'error': f"Aucun client trouvé avec SK_ID_CURR = {sk_id_curr}"}), 404
 
+    # Préparation des données (exclure SK_ID_CURR)
     sample_input = sample.drop(columns=['SK_ID_CURR'])
 
-    # Prédiction directe via le pipeline
-    proba = model.predict_proba(sample_input)[0][1]
+    # Prédiction avec pipeline complet (qui inclut scaler + SMOTE + modèle)
+    proba = pipeline.predict_proba(sample_input)[0][1]
 
-    # SHAP: extraire le classifieur LightGBM et le transformer sur les données pré-traitées
-    explainer = shap.TreeExplainer(model.named_steps['classifier'])
-    sample_transformed = model[:-1].transform(sample_input)  # Tout sauf le classifieur
-    shap_values = explainer.shap_values(sample_transformed)
+    # Pour SHAP, on récupère le modèle final du pipeline (dernier step)
+    model = pipeline.named_steps['model']
+
+    # Créer explainer SHAP pour le modèle LightGBM
+    explainer = shap.TreeExplainer(model)
+    shap_values = explainer.shap_values(sample_input)
 
     return jsonify({
         'probability': round(proba * 100, 2),
