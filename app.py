@@ -8,7 +8,7 @@ app = Flask(__name__)
 
 # === Paths ===
 current_directory = os.path.abspath(os.path.dirname(__file__))
-pipeline_path = os.path.join(current_directory, "Simulations", "Best_model", "lgbm_pipeline.pkl")
+pipeline_path = os.path.join(current_directory, "Simulations", "Best_model", "lgbm_pipeline1.pkl")
 csv_path = os.path.join(current_directory, "Simulations", "Data", "features_for_prediction.csv")
 
 # === Vérification des fichiers ===
