@@ -2,8 +2,6 @@ from flask import Flask, jsonify, request, render_template
 import os
 import joblib
 import pandas as pd
-import shap
-import gc  # Pour libérer la mémoire si nécessaire
 
 app = Flask(__name__)
 
@@ -20,7 +18,7 @@ for path, label in [(pipeline_path, "pipeline complet"), (csv_path, "CSV")]:
 # === Chargement du pipeline + noms de colonnes ===
 model_bundle = joblib.load(pipeline_path)
 pipeline = model_bundle['pipeline']
-expected_features = model_bundle['features']  # Liste des noms de colonnes
+expected_features = model_bundle['features']
 
 # === Routes ===
 @app.route("/")
@@ -35,6 +33,7 @@ def predict():
         return jsonify({'error': "Champ 'SK_ID_CURR' requis"}), 400
 
     df = pd.read_csv(csv_path)
+
     if 'SK_ID_CURR' not in df.columns:
         return jsonify({'error': "La colonne 'SK_ID_CURR' est absente du fichier CSV"}), 500
 
@@ -44,35 +43,16 @@ def predict():
 
     try:
         sample_input = sample[expected_features].copy()
-    except Exception as e:
-        return jsonify({'error': f"Erreur dans le réarrangement des colonnes : {str(e)}"}), 500
 
-    try:
-        # Convertir toutes les colonnes en numériques si possible
+        # Convertir tous les champs en numérique, remplacer les erreurs par NaN, puis remplacer les NaN par 0
         sample_input = sample_input.apply(pd.to_numeric, errors='coerce')
+        sample_input = sample_input.fillna(0)
 
-        # Gestion des NaNs
-        if sample_input.isnull().any().any():
-            sample_input = sample_input.fillna(0)
-
-        # Prédiction
         proba = pipeline.predict_proba(sample_input)[0][1]
-
-        # Explication SHAP (optimisé)
-        model = pipeline.named_steps['model']
-        explainer = shap.Explainer(model)
-        shap_values = explainer(sample_input)
-        shap_values_row = shap_values.values[0].tolist()
-
-        # Libérer mémoire
-        del shap_values
-        gc.collect()
 
         return jsonify({
             'probability': round(proba * 100, 2),
-            'shap_values': shap_values_row,
-            'feature_names': sample_input.columns.tolist(),
-            'feature_values': sample_input.values[0].tolist()
+            'message': "SHAP désactivé pour éviter les crashs mémoire"
         })
 
     except Exception as e:
