@@ -42,27 +42,29 @@ def predict():
         return jsonify({'error': f"Aucun client trouvé avec SK_ID_CURR = {sk_id_curr}"}), 404
 
     try:
-        sample_input = sample[expected_features]
+        sample_input = sample[expected_features].copy()
 
-        # Reconstruction DataFrame pour être sûr de l’ordre et colonnes
-        sample_input = pd.DataFrame(sample_input.values, columns=expected_features)
-
-        # Conversion des colonnes en numériques (float/int) quand c’est possible
-        sample_input = sample_input.apply(pd.to_numeric, errors='ignore')
+        # Conversion sécurisée des colonnes numériques
+        for col in sample_input.columns:
+            try:
+                sample_input[col] = pd.to_numeric(sample_input[col])
+            except Exception:
+                pass
 
     except Exception as e:
-        return jsonify({'error': f"Erreur dans le réarrangement des colonnes : {str(e)}"}), 500
+        return jsonify({'error': f"Erreur dans le réarrangement ou conversion des colonnes : {str(e)}"}), 500
 
     try:
         proba = pipeline.predict_proba(sample_input)[0][1]
 
         model = pipeline.named_steps['model']
-        explainer = shap.Explainer(model)
-        shap_values = explainer(sample_input)
+        explainer = shap.TreeExplainer(model)
+        shap_values = explainer.shap_values(sample_input)
+        shap_values_row = shap_values[1][0].tolist()  # Classe 1 (positive)
 
         return jsonify({
             'probability': round(proba * 100, 2),
-            'shap_values': shap_values.values[0].tolist(),
+            'shap_values': shap_values_row,
             'feature_names': sample_input.columns.tolist(),
             'feature_values': sample_input.values[0].tolist()
         })
