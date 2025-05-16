@@ -3,7 +3,6 @@ import os
 import joblib
 import pandas as pd
 import shap
-import numpy as np
 
 app = Flask(__name__)
 
@@ -44,22 +43,31 @@ def predict():
     # Préparation des données (exclure SK_ID_CURR)
     sample_input = sample.drop(columns=['SK_ID_CURR'])
 
-    # Prédiction avec pipeline complet (qui inclut scaler + SMOTE + modèle)
-    proba = pipeline.predict_proba(sample_input)[0][1]
+    # S'assurer que les colonnes sont dans le bon ordre et qu'elles correspondent
+    try:
+        expected_features = pipeline.named_steps['model'].feature_name_
+        sample_input = sample_input[expected_features]
+    except Exception as e:
+        return jsonify({'error': f"Erreur dans le réarrangement des colonnes : {str(e)}"}), 500
 
-    # Pour SHAP, on récupère le modèle final du pipeline (dernier step)
-    model = pipeline.named_steps['model']
+    try:
+        # Prédiction avec pipeline complet
+        proba = pipeline.predict_proba(sample_input)[0][1]
 
-    # Créer explainer SHAP pour le modèle LightGBM
-    explainer = shap.TreeExplainer(model)
-    shap_values = explainer.shap_values(sample_input)
+        # SHAP values
+        model = pipeline.named_steps['model']
+        explainer = shap.TreeExplainer(model)
+        shap_values = explainer.shap_values(sample_input)
 
-    return jsonify({
-        'probability': round(proba * 100, 2),
-        'shap_values': shap_values[1][0].tolist(),
-        'feature_names': sample_input.columns.tolist(),
-        'feature_values': sample_input.values[0].tolist()
-    })
+        return jsonify({
+            'probability': round(proba * 100, 2),
+            'shap_values': shap_values[1][0].tolist(),  # Classe 1
+            'feature_names': sample_input.columns.tolist(),
+            'feature_values': sample_input.values[0].tolist()
+        })
+
+    except Exception as e:
+        return jsonify({'error': f"Erreur pendant la prédiction : {str(e)}"}), 500
 
 # === Lancement de l'application ===
 if __name__ == "__main__":
