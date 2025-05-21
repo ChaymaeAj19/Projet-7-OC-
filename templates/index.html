@@ -3,42 +3,106 @@
 <head>
     <meta charset="UTF-8" />
     <title>Prédiction crédit</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 30px;
+        }
+        form {
+            margin-bottom: 20px;
+        }
+        canvas {
+            max-width: 700px;
+        }
+    </style>
 </head>
 <body>
     <h1>Prédiction de risque crédit</h1>
+
     <form id="predictForm">
         <label for="sk_id">SK_ID_CURR :</label>
         <input type="number" id="sk_id" name="sk_id" required />
         <button type="submit">Prédire</button>
     </form>
+
     <div id="result"></div>
+    <canvas id="shapChart" width="700" height="400"></canvas>
 
     <script>
-    const form = document.getElementById('predictForm');
-    const resultDiv = document.getElementById('result');
+        const form = document.getElementById('predictForm');
+        const resultDiv = document.getElementById('result');
+        const shapChartCanvas = document.getElementById('shapChart');
+        let shapChart = null;
 
-    form.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const sk_id = document.getElementById('sk_id').value;
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const sk_id = document.getElementById('sk_id').value;
 
-        const response = await fetch('/predict', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({SK_ID_CURR: Number(sk_id)})
+            // Réinitialise l'affichage
+            resultDiv.innerHTML = '';
+            if (shapChart) {
+                shapChart.destroy();
+                shapChart = null;
+            }
+
+            try {
+                const response = await fetch('/predict', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ SK_ID_CURR: Number(sk_id) })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    resultDiv.textContent = `Erreur : ${data.error}`;
+                    return;
+                }
+
+                // Affiche la probabilité
+                resultDiv.innerHTML = `
+                    <p><strong>Probabilité de défaut :</strong> ${data.probability.toFixed(2)}%</p>
+                    <h3>Top caractéristiques influentes (valeurs SHAP)</h3>
+                `;
+
+                // Crée le graphique SHAP
+                const labels = data.shap_values.map(item => item[0]);
+                const values = data.shap_values.map(item => item[1]);
+
+                const ctx = shapChartCanvas.getContext('2d');
+                shapChart = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: 'Valeur SHAP',
+                            data: values,
+                            backgroundColor: values.map(v => v > 0 ? 'rgba(75, 192, 192, 0.7)' : 'rgba(255, 99, 132, 0.7)')
+                        }]
+                    },
+                    options: {
+                        indexAxis: 'y',
+                        responsive: true,
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                                callbacks: {
+                                    label: ctx => `${ctx.parsed.x.toFixed(4)}`
+                                }
+                            }
+                        },
+                        scales: {
+                            x: { title: { display: true, text: 'Impact SHAP' } },
+                            y: { title: { display: true, text: 'Feature' } }
+                        }
+                    }
+                });
+
+            } catch (error) {
+                resultDiv.textContent = `Erreur réseau ou serveur : ${error.message}`;
+            }
         });
-
-        const data = await response.json();
-
-        if (response.ok) {
-            resultDiv.innerHTML = `
-                <p><strong>Probabilité de défaut:</strong> ${data.probability.toFixed(2)}%</p>
-                <h3>Valeurs SHAP :</h3>
-                <pre>${JSON.stringify(data.shap_values, null, 2)}</pre>
-            `;
-        } else {
-            resultDiv.textContent = `Erreur : ${data.error}`;
-        }
-    });
     </script>
 </body>
 </html>
