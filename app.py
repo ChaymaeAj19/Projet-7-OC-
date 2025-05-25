@@ -63,13 +63,31 @@ def predict():
 
         if with_shap:
             shap_values = explainer.shap_values(sample_input)
+
+            # === SHAP local (waterfall) ===
+            shap.initjs()
+            shap_value = shap_values[1][0]
+            feature_names = sample_input.columns
+
+            explanation = shap.Explanation(
+                values=shap_value,
+                base_values=explainer.expected_value[1],
+                data=sample_input.iloc[0],
+                feature_names=feature_names
+            )
+
+            plt.clf()
+            shap.plots._waterfall.waterfall_legacy(explanation, show=False)
+
+            buf = io.BytesIO()
+            plt.savefig(buf, format="png", bbox_inches='tight')
+            buf.seek(0)
+            img_base64 = base64.b64encode(buf.read()).decode('utf-8')
+            buf.close()
+
             result.update({
-                'shap_values': shap_values[1][0].tolist(),
-                'feature_names': sample_input.columns.tolist(),
-                'feature_values': sample_input.iloc[0].tolist(),
+                'shap_plot_base64': img_base64
             })
-        else:
-            result['message'] = "SHAP désactivé (ajouter 'with_shap': true pour l'activer)"
 
         return jsonify(result)
 
