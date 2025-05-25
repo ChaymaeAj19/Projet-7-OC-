@@ -99,8 +99,11 @@ def predict():
 def shap_global():
     try:
         df = pd.read_csv(csv_path)
-        data_input = df[expected_features].copy()
-        data_input = data_input.head(500)  # Limiter à 500 lignes pour éviter surcharge mémoire
+
+        # Échantillonnage aléatoire pour limiter la mémoire
+        data_input = df[expected_features].sample(n=100, random_state=42).copy()
+
+        # Conversion en numérique et remplissage des NaN
         data_input = data_input.apply(pd.to_numeric, errors='coerce').fillna(0)
 
         shap_values = explainer.shap_values(data_input)
