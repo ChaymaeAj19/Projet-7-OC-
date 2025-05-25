@@ -5,6 +5,7 @@ import joblib
 import pandas as pd
 import shap
 import matplotlib.pyplot as plt
+import gc
 from flask import Flask, jsonify, request, render_template
 
 app = Flask(__name__)
@@ -23,6 +24,9 @@ for path, label in [(pipeline_path, "pipeline complet"), (csv_path, "CSV")]:
 model_bundle = joblib.load(pipeline_path)
 pipeline = model_bundle['pipeline']
 expected_features = model_bundle['features']
+
+# === Chargement global du CSV pour éviter les relectures répétées ===
+df_global = pd.read_csv(csv_path)
 
 # === Extraction du modèle pour SHAP ===
 model = pipeline.steps[-1][1]
@@ -43,12 +47,10 @@ def predict():
     if sk_id_curr is None:
         return jsonify({'error': "Champ 'SK_ID_CURR' requis"}), 400
 
-    df = pd.read_csv(csv_path)
-
-    if 'SK_ID_CURR' not in df.columns:
+    if 'SK_ID_CURR' not in df_global.columns:
         return jsonify({'error': "La colonne 'SK_ID_CURR' est absente du fichier CSV"}), 500
 
-    sample = df[df['SK_ID_CURR'] == sk_id_curr]
+    sample = df_global[df_global['SK_ID_CURR'] == sk_id_curr]
     if sample.empty:
         return jsonify({'error': f"Aucun client trouvé avec SK_ID_CURR = {sk_id_curr}"}), 404
 
@@ -89,6 +91,8 @@ def predict():
                 'shap_plot_base64': img_base64
             })
 
+            gc.collect()
+
         return jsonify(result)
 
     except Exception as e:
@@ -98,12 +102,8 @@ def predict():
 @app.route("/shap_global")
 def shap_global():
     try:
-        df = pd.read_csv(csv_path)
-
-        # Échantillonnage aléatoire pour limiter la mémoire
-        data_input = df[expected_features].sample(n=100, random_state=42).copy()
-
-        # Conversion en numérique et remplissage des NaN
+        # Échantillonnage aléatoire de 50 lignes pour limiter la mémoire
+        data_input = df_global[expected_features].sample(n=50, random_state=42).copy()
         data_input = data_input.apply(pd.to_numeric, errors='coerce').fillna(0)
 
         shap_values = explainer.shap_values(data_input)
@@ -122,6 +122,8 @@ def shap_global():
         buf.seek(0)
         img_base64 = base64.b64encode(buf.read()).decode('utf-8')
         buf.close()
+
+        gc.collect()
 
         return jsonify({"image": img_base64})
 
