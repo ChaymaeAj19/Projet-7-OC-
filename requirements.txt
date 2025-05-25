@@ -4,6 +4,7 @@ shap
 scikit-learn
 imbalanced-learn
 lightgbm
+matplotlib
 Flask==2.2.3
 Werkzeug==2.2.3
 gunicorn
