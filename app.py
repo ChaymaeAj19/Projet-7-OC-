@@ -1,7 +1,10 @@
 import os
+import io
+import base64
 import joblib
 import pandas as pd
 import shap
+import matplotlib.pyplot as plt
 from flask import Flask, jsonify, request, render_template
 
 app = Flask(__name__)
@@ -16,20 +19,21 @@ for path, label in [(pipeline_path, "pipeline complet"), (csv_path, "CSV")]:
     if not os.path.exists(path):
         raise FileNotFoundError(f"Fichier {label} non trouvé : {path}")
 
-# === Chargement du pipeline et des noms de colonnes attendues ===
+# === Chargement du pipeline et des colonnes ===
 model_bundle = joblib.load(pipeline_path)
 pipeline = model_bundle['pipeline']
 expected_features = model_bundle['features']
 
-# Pour SHAP (modèle et explainer extraits du pipeline)
-model = getattr(pipeline, 'steps', [])[::-1][0][1]  # Le dernier step est souvent le modèle
+# === Extraction du modèle pour SHAP ===
+model = pipeline.steps[-1][1]
 explainer = shap.TreeExplainer(model)
 
-# === Routes ===
+# === ROUTE Accueil ===
 @app.route("/")
 def index():
     return render_template("index.html")
 
+# === ROUTE Prédiction personnalisée ===
 @app.route("/predict", methods=['POST'])
 def predict():
     data = request.json
@@ -51,7 +55,6 @@ def predict():
     try:
         sample_input = sample[expected_features].copy()
         sample_input = sample_input.apply(pd.to_numeric, errors='coerce').fillna(0)
-
         proba = pipeline.predict_proba(sample_input)[0][1]
 
         result = {
@@ -72,6 +75,36 @@ def predict():
 
     except Exception as e:
         return jsonify({'error': f"Erreur pendant la prédiction : {str(e)}"}), 500
+
+# === ROUTE SHAP Global ===
+@app.route("/shap_global")
+def shap_global():
+    try:
+        df = pd.read_csv(csv_path)
+        data_input = df[expected_features].copy()
+        data_input = data_input.apply(pd.to_numeric, errors='coerce').fillna(0)
+
+        shap_values = explainer.shap_values(data_input)
+
+        plt.clf()
+        shap.summary_plot(
+            shap_values[1],
+            data_input,
+            plot_type="bar",
+            show=False,
+            max_display=10
+        )
+
+        buf = io.BytesIO()
+        plt.savefig(buf, format="png", bbox_inches='tight')
+        buf.seek(0)
+        img_base64 = base64.b64encode(buf.read()).decode('utf-8')
+        buf.close()
+
+        return jsonify({"image": img_base64})
+
+    except Exception as e:
+        return jsonify({"error": f"Erreur lors du calcul du SHAP global : {str(e)}"}), 500
 
 # === Lancement ===
 if __name__ == "__main__":
