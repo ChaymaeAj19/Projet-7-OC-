@@ -54,11 +54,13 @@
             if (response.ok) {
                 let html = `<p><strong>Probabilité de défaut:</strong> ${data.probability.toFixed(2)}%</p>`;
 
-                if (data.shap_values) {
+                if (withShap && data.shap_plot_base64) {
                     html += `
-                        <h3>Valeurs SHAP du client :</h3>
-                        <pre>${JSON.stringify(data.shap_values.slice(0, 10), null, 2)}</pre>
+                        <h3>Explication SHAP locale (waterfall) :</h3>
+                        <img src="data:image/png;base64,${data.shap_plot_base64}" alt="SHAP local plot" />
                     `;
+                } else if (withShap) {
+                    html += `<p>Valeurs SHAP non disponibles.</p>`;
                 }
 
                 resultDiv.innerHTML = html;
