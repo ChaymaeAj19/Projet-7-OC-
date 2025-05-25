@@ -3,63 +3,80 @@
 <head>
     <meta charset="UTF-8" />
     <title>Prédiction crédit</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        label, button { margin-top: 10px; display: block; }
+        pre { background-color: #f4f4f4; padding: 10px; overflow-x: auto; }
+        img { max-width: 100%; margin-top: 20px; }
+    </style>
 </head>
 <body>
     <h1>Prédiction de risque crédit</h1>
-    
+
     <form id="predictForm">
         <label for="sk_id">SK_ID_CURR :</label>
         <input type="number" id="sk_id" name="sk_id" required />
-
         <label>
-            <input type="checkbox" id="with_shap" />
-            Inclure les valeurs SHAP
+            <input type="checkbox" id="with_shap" /> Inclure les valeurs SHAP
         </label>
-
         <button type="submit">Prédire</button>
     </form>
 
     <div id="result"></div>
 
+    <hr />
+
+    <h2>Analyse Globale SHAP</h2>
+    <button id="globalShapBtn">Afficher le graphique SHAP global</button>
+    <div id="globalShapResult"></div>
+
     <script>
         const form = document.getElementById('predictForm');
         const resultDiv = document.getElementById('result');
+        const globalBtn = document.getElementById('globalShapBtn');
+        const globalDiv = document.getElementById('globalShapResult');
 
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
-
             const sk_id = Number(document.getElementById('sk_id').value);
             const withShap = document.getElementById('with_shap').checked;
+
+            resultDiv.innerHTML = "Chargement...";
 
             const response = await fetch('/predict', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({
-                    SK_ID_CURR: sk_id,
-                    with_shap: withShap
-                })
+                body: JSON.stringify({ SK_ID_CURR: sk_id, with_shap: withShap })
             });
 
             const data = await response.json();
+
             if (response.ok) {
-                let html = `<p><strong>Probabilité de défaut :</strong> ${data.probability.toFixed(2)}%</p>`;
+                let html = `<p><strong>Probabilité de défaut:</strong> ${data.probability.toFixed(2)}%</p>`;
 
                 if (data.shap_values) {
-                    html += `<h3>Valeurs SHAP :</h3>
-                        <pre>${JSON.stringify(data.shap_values, null, 2)}</pre>
-                        <h4>Caractéristiques :</h4>
-                        <ul>`;
-                    data.feature_names.forEach((name, i) => {
-                        html += `<li>${name}: ${data.feature_values[i]}</li>`;
-                    });
-                    html += `</ul>`;
-                } else if (data.message) {
-                    html += `<p><em>${data.message}</em></p>`;
+                    html += `
+                        <h3>Valeurs SHAP du client :</h3>
+                        <pre>${JSON.stringify(data.shap_values.slice(0, 10), null, 2)}</pre>
+                    `;
                 }
 
                 resultDiv.innerHTML = html;
             } else {
-                resultDiv.textContent = `Erreur : ${data.error}`;
+                resultDiv.innerHTML = `<p style="color:red;">Erreur : ${data.error}</p>`;
+            }
+        });
+
+        globalBtn.addEventListener('click', async () => {
+            globalDiv.innerHTML = "Chargement du graphique SHAP global...";
+
+            const response = await fetch('/shap_global');
+            const data = await response.json();
+
+            if (response.ok && data.image) {
+                globalDiv.innerHTML = `<img src="data:image/png;base64,${data.image}" alt="SHAP global plot" />`;
+            } else {
+                globalDiv.innerHTML = `<p style="color:red;">Erreur : ${data.error || 'Impossible de générer le graphique'}</p>`;
             }
         });
     </script>
