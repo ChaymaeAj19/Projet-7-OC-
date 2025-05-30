@@ -32,7 +32,6 @@ if 'SK_ID_CURR' not in data.columns:
 X_all = data[expected_features].copy().apply(pd.to_numeric, errors='coerce').fillna(0)
 
 # === Création de l'explainer SHAP (global) ===
-# Utilise le booster natif LightGBM pour éviter l'erreur
 if hasattr(model, "booster_"):
     booster = model.booster_
 else:
@@ -68,22 +67,18 @@ st.markdown(f"### Décision : <span style='color:{'green' if proba < seuil else 
 
 # === SHAP local ===
 st.subheader("Explication locale SHAP")
-shap_values = explainer.shap_values(X_client)
-shap_val = shap_values[1][0] if isinstance(shap_values, list) else shap_values[0]
 
-explanation = shap.Explanation(
-    values=shap_val,
-    base_values=explainer.expected_value[1] if isinstance(explainer.expected_value, list) else explainer.expected_value,
-    data=X_client.iloc[0],
-    feature_names=expected_features
-)
+# Utiliser le nouvel explainer pour obtenir directement l'objet Explanation
+explanation = explainer(X_client)
 
 fig, ax = plt.subplots()
-shap.plots._waterfall.waterfall_legacy(explanation, show=False)
+shap.plots.waterfall(explanation[0], show=False)
 st.pyplot(fig)
 
 # === SHAP global ===
 st.subheader("Explication globale SHAP (features les plus importantes)")
+
+# Pour le SHAP global, on peut utiliser l'ancienne méthode
 global_shap_vals = explainer.shap_values(X_all)
 shap_val_global = global_shap_vals[1] if isinstance(global_shap_vals, list) else global_shap_vals
 
