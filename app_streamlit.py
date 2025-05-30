@@ -20,7 +20,7 @@ if not os.path.exists(model_path) or not os.path.exists(data_path):
 model_bundle = joblib.load(model_path)
 pipeline = model_bundle['pipeline']
 expected_features = model_bundle['features']
-model = pipeline.steps[-1][1]  # Modèle LightGBM
+model = pipeline.steps[-1][1]  # Modèle LightGBM (LGBMClassifier)
 
 # Données clients
 data = pd.read_csv(data_path)
@@ -31,8 +31,14 @@ if 'SK_ID_CURR' not in data.columns:
 # Données filtrées
 X_all = data[expected_features].copy().apply(pd.to_numeric, errors='coerce').fillna(0)
 
-# Explainer SHAP (global)
-explainer = shap.TreeExplainer(model, data=X_all.sample(n=min(1000, len(X_all)), random_state=42))
+# === Création de l'explainer SHAP (global) ===
+# Utilise le booster natif LightGBM pour éviter l'erreur
+if hasattr(model, "booster_"):
+    booster = model.booster_
+else:
+    booster = model
+
+explainer = shap.TreeExplainer(booster)
 
 # === Sidebar ===
 st.sidebar.header("Sélection du client")
