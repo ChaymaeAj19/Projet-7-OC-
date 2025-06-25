@@ -3,10 +3,10 @@ streamlit
 pandas
 matplotlib
 shap
-scikit-learn
-imbalanced-learn
 lightgbm
 matplotlib
 Flask==2.2.3
 Werkzeug==2.2.3
 gunicorn
+scikit-learn==1.2.2
+imbalanced-learn==0.10.1
