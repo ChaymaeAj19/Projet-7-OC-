@@ -1,8 +1,10 @@
---no-cache-dir
 joblib
 streamlit
 pandas
 matplotlib
 lightgbm
 scikit-learn==1.1.3
+shap==0.41.0
 imbalanced-learn==0.10.1
+numpy==1.24.3
+scipy==1.10.1
