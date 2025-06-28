@@ -68,28 +68,24 @@ st.markdown(f"### Décision : <span style='color:{'green' if proba < seuil else 
 # === SHAP local ===
 st.subheader("Explication locale SHAP")
 
-# Valeurs SHAP locales pour l'observation sélectionnée
-shap_values_local = explainer.shap_values(X_client)[1][0] if isinstance(explainer.shap_values(X_client), list) else explainer.shap_values(X_client)[0]
-base_value = explainer.expected_value[1] if isinstance(explainer.expected_value, list) else explainer.expected_value
+# Calcul de l'explication SHAP locale
+explanation = explainer(X_client)
 
-# Construction de l'objet Explanation avec données bien typées
-feature_values = X_client.iloc[0].astype(float).values
-feature_names = X_client.columns.astype(str).tolist()
+# Cas : si l'explication est un objet SHAP "Explanation"
+if isinstance(explanation, shap.Explanation):
+    if hasattr(explanation, 'values') and explanation.values.ndim > 1:
+        # Plusieurs classes : sélection de celle correspondant à la classe 1 (défaut)
+        explanation_local = explanation[0, :, 1]
+    else:
+        explanation_local = explanation[0]
+else:
+    st.warning("Format inattendu des valeurs SHAP locales.")
+    explanation_local = None
 
-explanation_local = shap.Explanation(
-    values=shap_values_local,
-    base_values=base_value,
-    data=feature_values,
-    feature_names=feature_names
-)
-
-# Affichage graphique local
-fig, ax = plt.subplots()
-shap.plots.waterfall(explanation_local, show=False)
-st.pyplot(fig)
+if explanation_local is not None:
+    fig, ax = plt.subplots()
+    shap.plots.waterfall(explanation_local, show=False)
+    st.pyplot(fig)
 
 # === SHAP global ===
 st.subheader("Explication globale SHAP (features les plus importantes)")
-
-global_shap_vals = explainer.shap_values(X_all)
-shap_val_global = global_shap_vals[1] i
