@@ -20,7 +20,7 @@ if not os.path.exists(model_path) or not os.path.exists(data_path):
 model_bundle = joblib.load(model_path)
 pipeline = model_bundle['pipeline']
 expected_features = model_bundle['features']
-model = pipeline.steps[-1][1]  # Modèle LightGBM (LGBMClassifier)
+model = pipeline.steps[-1][1]  # Modèle LightGBM
 
 # Données clients
 data = pd.read_csv(data_path)
@@ -31,7 +31,7 @@ if 'SK_ID_CURR' not in data.columns:
 # Données filtrées
 X_all = data[expected_features].copy().apply(pd.to_numeric, errors='coerce').fillna(0)
 
-# === Création de l'explainer SHAP (global) ===
+# === Création de l'explainer SHAP ===
 if hasattr(model, "booster_"):
     booster = model.booster_
 else:
@@ -68,14 +68,24 @@ st.markdown(f"### Décision : <span style='color:{'green' if proba < seuil else 
 # === SHAP local ===
 st.subheader("Explication locale SHAP")
 
-# Obtenir l'explication SHAP
-explanation = explainer(X_client)
+# Obtenir les shap_values
+shap_values_local_all = explainer.shap_values(X_client)
 
-# Sélectionner la sortie classe 1 si nécessaire (pour classifier)
-if hasattr(explanation[0], "shape") and len(explanation[0].base_values.shape) > 0:
-    explanation_local = explanation[0].select(output=1)
+# Pour les classifieurs binaires, shap_values est une liste
+if isinstance(shap_values_local_all, list) and len(shap_values_local_all) == 2:
+    shap_values_local = shap_values_local_all[1][0]  # Classe 1, 1er client
+    base_value = explainer.expected_value[1]
 else:
-    explanation_local = explanation[0]
+    shap_values_local = shap_values_local_all[0]
+    base_value = explainer.expected_value
+
+# Construction de l'objet SHAP Explanation
+explanation_local = shap.Explanation(
+    values=shap_values_local,
+    base_values=base_value,
+    data=X_client.iloc[0],
+    feature_names=X_client.columns.tolist()
+)
 
 fig, ax = plt.subplots()
 shap.plots.waterfall(explanation_local, show=False)
@@ -84,9 +94,9 @@ st.pyplot(fig)
 # === SHAP global ===
 st.subheader("Explication globale SHAP (features les plus importantes)")
 
-global_shap_vals = explainer.shap_values(X_all)
-shap_val_global = global_shap_vals[1] if isinstance(global_shap_vals, list) else global_shap_vals
+shap_values_global_all = explainer.shap_values(X_all)
+shap_values_global = shap_values_global_all[1] if isinstance(shap_values_global_all, list) else shap_values_global_all
 
 fig2, ax2 = plt.subplots()
-shap.summary_plot(shap_val_global, X_all, plot_type='bar', show=False, max_display=10)
+shap.summary_plot(shap_values_global, X_all, plot_type='bar', show=False, max_display=10)
 st.pyplot(fig2)
