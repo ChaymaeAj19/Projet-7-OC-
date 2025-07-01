@@ -68,24 +68,20 @@ st.markdown(f"### Décision : <span style='color:{'green' if proba < seuil else 
 # === SHAP local ===
 st.subheader("Explication locale SHAP")
 
-# Calcul de l'explication SHAP locale
+# Utiliser le nouvel explainer pour obtenir directement l'objet Explanation
 explanation = explainer(X_client)
 
-# Cas : si l'explication est un objet SHAP "Explanation"
-if isinstance(explanation, shap.Explanation):
-    if hasattr(explanation, 'values') and explanation.values.ndim > 1:
-        # Plusieurs classes : sélection de celle correspondant à la classe 1 (défaut)
-        explanation_local = explanation[0, :, 1]
-    else:
-        explanation_local = explanation[0]
-else:
-    st.warning("Format inattendu des valeurs SHAP locales.")
-    explanation_local = None
-
-if explanation_local is not None:
-    fig, ax = plt.subplots()
-    shap.plots.waterfall(explanation_local, show=False)
-    st.pyplot(fig)
+fig, ax = plt.subplots()
+shap.plots.waterfall(explanation[0], show=False)
+st.pyplot(fig)
 
 # === SHAP global ===
 st.subheader("Explication globale SHAP (features les plus importantes)")
+
+# Pour le SHAP global, on peut utiliser l'ancienne méthode
+global_shap_vals = explainer.shap_values(X_all)
+shap_val_global = global_shap_vals[1] if isinstance(global_shap_vals, list) else global_shap_vals
+
+fig2, ax2 = plt.subplots()
+shap.summary_plot(shap_val_global, X_all, plot_type='bar', show=False, max_display=10)
+st.pyplot(fig2)
