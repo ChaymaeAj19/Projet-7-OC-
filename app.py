@@ -42,45 +42,47 @@ def index():
 def predict():
     data = request.json
     sk_id_curr = data.get('SK_ID_CURR')
-    input_data = data.get('data', None)  # Peut être None ou liste de dicts
     with_shap = data.get('with_shap', False)
+    data_modified = data.get('data', None)  # Liste avec un dict modifié
 
     if sk_id_curr is None:
         return jsonify({'error': "Champ 'SK_ID_CURR' requis"}), 400
 
-    try:
-        if input_data:
-            # Utiliser les données modifiées passées dans "data"
-            df_input = pd.DataFrame(input_data)
-        else:
-            # Sinon récupérer les données du client dans le CSV
-            df_input = df_global[df_global['SK_ID_CURR'] == sk_id_curr]
-
-        if df_input.empty:
+    if data_modified is not None:
+        # Utiliser les données modifiées envoyées
+        try:
+            sample_input = pd.DataFrame(data_modified)
+            sample_input = sample_input[expected_features]
+            sample_input = sample_input.apply(pd.to_numeric, errors='coerce').fillna(0)
+        except Exception as e:
+            return jsonify({'error': f"Erreur traitement des données modifiées: {str(e)}"}), 400
+    else:
+        # Sinon utiliser ligne client dans le CSV
+        if 'SK_ID_CURR' not in df_global.columns:
+            return jsonify({'error': "La colonne 'SK_ID_CURR' est absente du fichier CSV"}), 500
+        sample = df_global[df_global['SK_ID_CURR'] == sk_id_curr]
+        if sample.empty:
             return jsonify({'error': f"Aucun client trouvé avec SK_ID_CURR = {sk_id_curr}"}), 404
+        sample_input = sample[expected_features].copy()
+        sample_input = sample_input.apply(pd.to_numeric, errors='coerce').fillna(0)
 
-        # Ne garder que les colonnes attendues par le pipeline
-        df_input = df_input[expected_features].copy()
-        df_input = df_input.apply(pd.to_numeric, errors='coerce').fillna(0)
-
-        proba = pipeline.predict_proba(df_input)[0][1]
-
+    try:
+        proba = pipeline.predict_proba(sample_input)[0][1]
         result = {
             'probability': round(proba * 100, 2),
         }
 
         if with_shap:
-            shap_values = explainer.shap_values(df_input)
+            shap_values = explainer.shap_values(sample_input)
 
-            # === SHAP local (waterfall) ===
             shap.initjs()
             shap_value = shap_values[1][0]
-            feature_names = df_input.columns
+            feature_names = sample_input.columns
 
             explanation = shap.Explanation(
                 values=shap_value,
                 base_values=explainer.expected_value[1],
-                data=df_input.iloc[0],
+                data=sample_input.iloc[0],
                 feature_names=feature_names
             )
 
